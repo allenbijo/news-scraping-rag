@@ -18,7 +18,7 @@ def get_news_links():
 
 	# Save links to file
 	try:
-		with open('papers.pkl', 'rb') as f:
+		with open('news.pkl', 'rb') as f:
 			existing_data = pickle.load(f)
 			for link in links:
 				if link not in existing_data:
@@ -28,7 +28,7 @@ def get_news_links():
 	except FileNotFoundError:
 		existing_data = links
 
-	with open('papers.pkl', 'wb') as f:
+	with open('news.pkl', 'wb') as f:
 		pickle.dump(existing_data, f)
 
 	return links
