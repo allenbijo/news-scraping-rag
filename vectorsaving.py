@@ -20,6 +20,8 @@ def vectorize_papers(news):
 			pass
 		db.save_local("faiss_index")
 
+
+# Function to get the vectors
 def get_vectors():
 	embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 	db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)

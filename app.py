@@ -30,7 +30,9 @@ app.add_middleware(
 )
 
 # Configure Redis
-redis_client = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = os.getenv('REDIS_PORT', 6379)
+redis_client = aioredis.from_url(f"redis://{redis_host}:{redis_port}", encoding="utf-8", decode_responses=True)
 CACHE_EXPIRATION = 60 * 60 * 24  # 24 hours
 USER_REQUEST_LIMIT = 5  # Maximum 5 requests per user
 
@@ -124,5 +126,5 @@ async def scrape_news():
 
 
 if __name__ == "__main__":
-	uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-	# http://127.0.0.1:8000/search?text=infosys&top_k=5&threshold=0.5
+	uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+	# http://localhost:8000/search?text=infosys&top_k=5&threshold=0.5&user_id=1
