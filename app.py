@@ -69,12 +69,12 @@ async def search(
 
 	results = vectors.similarity_search_with_score(query=text, k=top_k)
 
-	filtered_results = [(result.page_content, float(score)) for result, score in results if score >= threshold]
+	filtered_results = sorted([(result, float(score)) for result, score in results if score >= threshold], key=lambda x: x[1], reverse=True)
 
 	# Serialize the results in a JSON-friendly format
 	serializable_results = [
-		{"content": content, "score": score}
-		for content, score in filtered_results
+		{"result": json.dumps(vars(result)), "score": score}
+		for result, score in filtered_results
 	]
 
 	# Cache the results
