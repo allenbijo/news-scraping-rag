@@ -7,7 +7,6 @@ from functools import lru_cache
 import json
 import uvicorn
 import time
-from datetime import datetime
 from langchain_community.vectorstores import FAISS
 from vectorsaving import vectorize_papers, get_vectors
 from fetch_news import get_news_links, load_news
@@ -63,7 +62,7 @@ async def search(
 		threshold: float = Query(0.8, title="Similarity score threshold"),
 		user_id: str = Query(..., title="User ID")
 
-):
+) -> dict:
 	# Start tracking time
 	start_time = time.time()
 
