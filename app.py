@@ -5,15 +5,20 @@ from fastapi.middleware.cors import CORSMiddleware
 import aioredis
 from functools import lru_cache
 import json
-from pydantic import BaseModel
-from typing import List, Tuple
 import uvicorn
 import time
 from datetime import datetime
 from langchain_community.vectorstores import FAISS
 from vectorsaving import vectorize_papers, get_vectors
 from fetch_news import get_news_links, load_news
+import logging
 
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api_logger")
+
+# Configure FastAPI
 app = FastAPI()
 
 app.add_middleware(
@@ -24,9 +29,10 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
-# Redis setup
+# Configure Redis
 redis_client = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
 CACHE_EXPIRATION = 60 * 60 * 24  # 24 hours
+USER_REQUEST_LIMIT = 5  # Maximum 5 requests per user
 
 
 @lru_cache()
@@ -34,23 +40,32 @@ def get_db():
 	return get_vectors()
 
 
+# Scrape news on startup
 @app.on_event("startup")
 async def startup_event():
 	asyncio.create_task(scrape_news())
 
 
+# Health check endpoint
 @app.get("/health")
 async def health_check():
 	return {"status": "healthy", "message": f"API is active"}
 
 
+# Search endpoint
 @app.get("/search")
 async def search(
 		vectors: FAISS = Depends(get_vectors),
 		text: str = Query(..., title="Search query"),
 		top_k: int = Query(4, title="Number of results to fetch"),
-		threshold: float = Query(0.8, title="Similarity score threshold")
+		threshold: float = Query(0.8, title="Similarity score threshold"),
+		user_id: str = Query(..., title="User ID")
+
 ):
+	# Start tracking time
+	start_time = time.time()
+
+	# Input validation
 	if not text:
 		raise HTTPException(status_code=400, detail="Search query cannot be empty")
 
@@ -59,6 +74,17 @@ async def search(
 
 	if threshold < 0 or threshold > 1:
 		raise HTTPException(status_code=400, detail="Threshold must be between 0 and 1")
+
+	# Rate limiting check
+	user_key = f"user:{user_id}:requests"
+	request_count = await redis_client.get(user_key)
+
+	if request_count is None:
+		await redis_client.set(user_key, 1, ex=60 * 60 * 24)  # 24 hours expiration
+	elif int(request_count) >= USER_REQUEST_LIMIT:
+		raise HTTPException(status_code=429, detail="Rate limit exceeded. You can make only 5 requests per day.")
+	else:
+		await redis_client.incr(user_key)
 
 	# Check if results are in cache
 	cache_key = f"search:{text}:{top_k}:{threshold}"
@@ -80,7 +106,15 @@ async def search(
 	# Cache the results
 	await redis_client.setex(cache_key, CACHE_EXPIRATION, json.dumps(serializable_results))
 
-	return filtered_results
+	# Log inference time
+	inference_time = time.time() - start_time
+	logger.info(f"Inference Time: {inference_time:.4f} seconds for User: {user_id} with Query: '{text}'")
+
+	# Return results and add inference time to the response
+	return {
+		"results": filtered_results,
+		"inference_time": inference_time
+	}
 
 
 async def scrape_news():
@@ -91,4 +125,4 @@ async def scrape_news():
 
 if __name__ == "__main__":
 	uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-# http://127.0.0.1:8000/search?text=infosys&top_k=5&threshold=0.5
+	# http://127.0.0.1:8000/search?text=infosys&top_k=5&threshold=0.5
